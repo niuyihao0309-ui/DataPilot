@@ -1,0 +1,32 @@
+# Docker 构建上下文排除清单
+# 作用：让 COPY . . 不会把无关的大文件/密钥塞进镜像，也能加快构建
+
+# ---- 密钥（用 compose 的 env_file 注入，不烘进镜像）----
+.env
+.env.local
+
+# ---- Python 运行痕迹 ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+
+# ---- 运行产物 ----
+output/
+upload/
+logs/
+*.log
+
+# ---- 前端（前端有自己独立的镜像）----
+ui/node_modules/
+ui/dist/
+
+# ---- 大模型权重（1.3G，不进镜像）----
+docker/embedding/bge-large-zh-v1.5/
+
+# ---- IDE / 版本控制 ----
+.idea/
+.vscode/
+.git/
+.gitignore

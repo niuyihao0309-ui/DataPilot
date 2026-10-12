@@ -1,0 +1,67 @@
+logging:
+  file:
+    enable: true
+    level: INFO
+    path: logs
+    rotation: "10 MB"
+    retention: "7 days"
+  console:
+    enable: true
+    level: INFO
+
+db_meta:
+  host: localhost
+  port: 3306
+  user: itwwy
+  password: your_password
+  database: meta
+
+db_dw:
+  host: localhost
+  port: 3306
+  user: itwwy
+  password: your_password
+  database: dw
+
+qdrant:
+  host: localhost
+  port: 6333
+  embedding_size: 1024
+
+embedding:
+  host: localhost
+  port: 8081
+  model: BAAI/bge-large-zh-v1.5
+
+
+es:
+  host: localhost
+  port: 9200
+  index_name: data_agent
+
+
+# ============================================================================
+# LLM 配置 —— ⚠️ 已废弃（当前 LLM 统一由项目根 .env 提供，用硅基流动）
+#   此节仅为满足 AppConfig 数据结构而保留，代码不再读取它（见 app/agent/llm.py）。
+#   切换供应商请改 .env 里的 OPENAI_BASE_URL / OPENAI_API_KEY / MODEL_NAME。
+# ============================================================================
+#
+#   ⚠️ 注意：LangChain 的 init_chat_model 是按「模型名前缀」推断 provider 的。
+#      · deepseek-ai/...  → 自动识别为 DeepSeek，无需额外参数
+#      · 无前缀的模型名（如 tokenmao 的 "TM ·xxx"）→ 需在 app/agent/llm.py
+#        里补 model_provider="openai"，否则报 Unable to infer model provider
+# ============================================================================
+llm:
+  model_name: deepseek-ai/DeepSeek-V4-Flash
+  api_key: sk-your-api-key
+  base_url: https://api.siliconflow.cn/v1
+
+# ----------------------------------------------------------------------------
+# 旧配置（阿里云百炼 · 已停用，保留备查）
+#   要切回阿里云：把上面那段 llm 整体注释掉，再把下面这段放开即可。
+#   停用原因：该 key 返回 401 invalid_api_key。
+# ----------------------------------------------------------------------------
+# llm:
+#   model_name: deepseek-v4-flash
+#   api_key: sk-xxxxxxxxxxxxxxxxxxxxxxxx
+#   base_url: https://ws-ps7umxojn5htiqnp.cn-beijing.maas.aliyuncs.com/compatible-mode/v1

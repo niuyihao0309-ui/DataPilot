@@ -1,0 +1,9 @@
+# 前端镜像构建排除清单
+node_modules/
+dist/
+.vscode/
+.git/
+.gitignore
+Dockerfile
+docker-compose*.yml
+*.log

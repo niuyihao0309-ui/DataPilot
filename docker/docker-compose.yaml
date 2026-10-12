@@ -1,0 +1,137 @@
+# 项目名（等价于 docker compose -p people-data）。
+# 显式指定的原因：本目录名叫 docker，若不指定，Compose 默认用它当项目名，
+# 会和 xiangm-NL2SQL/docker 等项目同名 → 共用同一个 mysql_data 卷，
+# 那个卷是 MySQL 8.4 建的，本 compose 用 8.0 会报 "Cannot downgrade from 80411 to 80046" 起不来。
+name: people-data
+
+services:
+
+  mysql:
+    image: mysql:8.0
+    container_name: mysql
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: itwwy123
+      MYSQL_USER: itwwy
+      MYSQL_PASSWORD: itwwy123
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./mysql:/docker-entrypoint-initdb.d
+    command:
+      --character-set-server=utf8mb4
+      --collation-server=utf8mb4_general_ci
+
+  elasticsearch:
+    build: ./elasticsearch
+    container_name: elasticsearch
+    restart: unless-stopped
+    environment:
+      discovery.type: single-node
+      xpack.security.enabled: "false"
+    ports:
+      - "9200:9200"
+    volumes:
+      - es_data:/usr/share/elasticsearch/data
+  kibana:
+    image: kibana:8.19.10
+    container_name: kibana
+    restart: unless-stopped
+    environment:
+      ELASTICSEARCH_HOSTS: http://elasticsearch:9200
+    ports:
+      - "5601:5601"
+    depends_on:
+      - elasticsearch
+
+  qdrant:
+    image: qdrant/qdrant:v1.16
+    container_name: qdrant
+    restart: unless-stopped
+    ports:
+      - "6333:6333"   # HTTP
+      - "6334:6334"   # gRPC
+    volumes:
+      - qdrant_data:/qdrant/storage
+
+  # 新增：合并进来的 deepagents 侧用 Redis 做 LangGraph checkpoint 持久化
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  embedding:
+    image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.8
+    container_name: embedding
+    restart: unless-stopped
+    ports:
+      - "8081:80"
+    environment:
+      MODEL_ID: /models/bge-large-zh-v1.5
+      MAX_CONCURRENT_REQUESTS: "16"
+      MAX_BATCH_TOKENS: "16384"
+    volumes:
+      - ./embedding/bge-large-zh-v1.5:/models/bge-large-zh-v1.5
+
+  # ---------------------------------------------------------------------------
+  # 应用层：后端 + 前端（新增，让「一条命令起全栈」成为可能）
+  #
+  # 它们怎么连上面的基础设施？
+  #   基础设施都已经把端口映射到宿主机（3306/9200/6333/6379/8081），
+  #   所以容器内的后端只要用 host.docker.internal 就能访问到它们。
+  #   这样后端配置里那一堆 localhost 只需整体替换一次即可，不用逐个改主机名。
+  # ---------------------------------------------------------------------------
+  backend:
+    build:
+      context: ..
+      dockerfile: docker/backend/Dockerfile
+    container_name: data-agent-backend
+    restart: unless-stopped
+    # 密钥从 .env 注入，不烘进镜像
+    env_file:
+      - ../.env
+    environment:
+      # ① 让 app/conf/app_config.py 把配置里的 localhost 统一换成宿主机地址
+      DATA_AGENT_HOST: host.docker.internal
+      # ② demo 侧的工具直接读这两个变量，也要指向宿主机
+      MYSQL_HOST: host.docker.internal
+    # Windows/Mac 的 Docker Desktop 自带 host.docker.internal；
+    # 加这行是为了在 Linux 上也能用（host-gateway）
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8005:8005"
+    volumes:
+      # 配置与提示词挂出来：改完不用重新构建镜像
+      - ../conf:/app/conf:ro
+      - ../prompts:/app/prompts:ro
+      # 产物与上传目录挂到宿主机，容器重建也不丢
+      - ../output:/app/output
+      - ../upload:/app/upload
+    depends_on:
+      - mysql
+      - elasticsearch
+      - qdrant
+      - redis
+      - embedding
+
+  frontend:
+    build:
+      context: ../ui
+    container_name: data-agent-frontend
+    restart: unless-stopped
+    ports:
+      - "5173:80"   # 宿主 5173 -> 容器 nginx 80
+    depends_on:
+      - backend
+
+volumes:
+  mysql_data:
+  es_data:
+  qdrant_data:
+  redis_data:
