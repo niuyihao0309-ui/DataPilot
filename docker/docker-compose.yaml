@@ -2,13 +2,16 @@
 # 显式指定的原因：本目录名叫 docker，若不指定，Compose 默认用它当项目名，
 # 会和 xiangm-NL2SQL/docker 等项目同名 → 共用同一个 mysql_data 卷，
 # 那个卷是 MySQL 8.4 建的，本 compose 用 8.0 会报 "Cannot downgrade from 80411 to 80046" 起不来。
+# 注意：下面所有 container_name 都加了 people-data- 前缀。
+# 原因：xiangm-NL2SQL/docker 用的是裸名 mysql / elasticsearch / kibana / qdrant / embedding，
+# 不隔离的话两个项目会互相抢容器名，谁后启动谁报 Conflict。
 name: people-data
 
 services:
 
   mysql:
     image: mysql:8.0
-    container_name: mysql
+    container_name: people-data-mysql
     restart: unless-stopped
     environment:
       # 敏感值不再硬编码：从 docker/.env 读取（该文件已被 .gitignore 排除）。
@@ -27,7 +30,7 @@ services:
 
   elasticsearch:
     build: ./elasticsearch
-    container_name: elasticsearch
+    container_name: people-data-elasticsearch
     restart: unless-stopped
     environment:
       discovery.type: single-node
@@ -38,7 +41,7 @@ services:
       - es_data:/usr/share/elasticsearch/data
   kibana:
     image: kibana:8.19.10
-    container_name: kibana
+    container_name: people-data-kibana
     restart: unless-stopped
     environment:
       ELASTICSEARCH_HOSTS: http://elasticsearch:9200
@@ -49,7 +52,7 @@ services:
 
   qdrant:
     image: qdrant/qdrant:v1.16
-    container_name: qdrant
+    container_name: people-data-qdrant
     restart: unless-stopped
     ports:
       - "6333:6333"   # HTTP
@@ -60,7 +63,7 @@ services:
   # 新增：合并进来的 deepagents 侧用 Redis 做 LangGraph checkpoint 持久化
   redis:
     image: redis:7-alpine
-    container_name: redis
+    container_name: people-data-redis
     restart: unless-stopped
     ports:
       - "6379:6379"
@@ -69,7 +72,7 @@ services:
 
   embedding:
     image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.8
-    container_name: embedding
+    container_name: people-data-embedding
     restart: unless-stopped
     ports:
       - "8081:80"
@@ -92,7 +95,7 @@ services:
     build:
       context: ..
       dockerfile: docker/backend/Dockerfile
-    container_name: data-agent-backend
+    container_name: people-data-backend
     restart: unless-stopped
     # 密钥从 .env 注入，不烘进镜像
     env_file:
@@ -125,7 +128,7 @@ services:
   frontend:
     build:
       context: ../ui
-    container_name: data-agent-frontend
+    container_name: people-data-frontend
     restart: unless-stopped
     ports:
       - "5173:80"   # 宿主 5173 -> 容器 nginx 80
